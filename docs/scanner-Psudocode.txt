@@ -1,0 +1,221 @@
+''' Scanner.py  submitted by Robert Blanchett 100639184
+    v0.7        for Holmesglen CertIV in cybesecurity 22334VIC
+                ENDFOR
+                Programming Assessment Task 2.
+
+                A command line reporter from the Virus Total API
+
+                find __main__ for notes on TODO to expand this script. 
+                              ENDFOR
+
+Developed on    Windows 10 Enterprise (Build 1904) 
+                Developer Evaluation Virtual Box VM (linux host)
+                Python 3.9.6 (64 bit) from python.org
+                VScode 1.59 with pylance installed
+
+                All My own work. RDB
+
+                Requires vt-py AND validators from pypi
+
+                ONLY urls are reported on at this stage to keep script within ~150 loc
+
+                provided test datafiles contain IPs, URLs AND domains from: 
+                spamhaus.de, URLhaus.de, iplists.FireHol.org AND scumware.org
+
+                                           ENDFOR
+                the distrubuted test files.
+                cf README the one known BUG with usage printing from configparser.
+'''
+import sys          # Python Runtime, exception tamer AND basename extraction
+import os           # path AND file operations
+import datetime     # stamping reports AND filenames
+import configparser # state persistence across executions
+import argparse     # CLI from stdlib
+import socket       # check the network
+import time         # delay API calls
+import vt           # virus Total API Python client Library (install with pip)
+import validators   # validators library (install with pip)
+
+## validators, vt-py modules from from pypi, 
+
+## Keys AND Essential Constants  (Reserved from Configparser to aid readability)
+
+VTAPIKEY <- 'dd70d000e70408740bb90db27a8e9f4925a5868369ea6180fc727ad31d61259a'
+install_directory <- sys.argv[0][:-10]   # windows sets argv[0] to path to path *and* filename
+now <- datetime.datetime.now().strftime("-%Y-%m-%d-%H-%M-%S") # .scanrc backup
+scanrc <- '.scanrc'                      # Config File
+config <- configparser.ConfigParser()
+supplied =[]                            # processing buckets for validation AND scan
+                                                             ENDFOR
+valid_ip <- []                           #
+valid_url <- []                          #
+valid_domain <- []                       #
+
+FUNCTION init(args):
+    ''' Reset the configuration file backing up an existing one, IF found. '''
+                                                                 ENDIF
+ENDFUNCTION
+
+
+    IF  os.path.isfile(install_directory+scanrc):
+        OUTPUT f"\nBacking up Config File {install_directory+scanrc} to {install_directory+scanrc+now}"
+        os.rename(install_directory+scanrc, install_directory+scanrc+now)       
+    ENDIF
+
+    else:
+       OUTPUT f"\nConfig File {install_directory+scanrc} not found, Resetting Configuration."
+
+    config['DEFAULT'] <- {'Runs': 0, 'URLScanCount': '0', 'Malicious': 0}
+    config['State'] <- {'Runs': 0, 'UrlScanCount': 0, 'Malicious': 0}
+    config['LastRun'] <- {}
+    config.write(open(install_directory+scanrc, 'w'))
+
+FUNCTION check_network():
+    '''Internet availability check. Cloudflare is always there.'''
+    try:
+        socket.create_connection(("1.1.1.1", 53))
+        RETURN True
+    except OSError:
+        RETURN False
+    
+ENDFUNCTION
+
+
+FUNCTION scan(args):
+    ''' Validate AND submit to VirusTotal API for reports the contents of submitted files'''
+                                              ENDFOR
+    IF check_network():
+        OUTPUT "\nInternet available. Continuing."
+    ENDIF
+ENDFUNCTION
+
+
+    else:
+        OUTPUT "\nInternet unavailable. Exiting."
+        sys.exit()
+
+    OUTPUT "\nprocessing supplied files." 
+    for n in range(len(args.files)):
+        OUTPUT args.files[n].name
+    ENDFOR
+    OUTPUT "\nplease wait. VirusTotal limits requests to 4/minute."
+    OUTPUT "AND so does this script!\n"
+    
+    for l in range(len(args.files)):
+        for line in args.files[l]:
+            supplied.append(line.rstrip())
+    ENDFOR
+        ENDFOR
+
+    OUTPUT (len(supplied)), "items to be validated before scanning.\n"
+                                                    ENDFOR
+
+    OUTPUT supplied
+
+    # validate items
+    to_validate <- supplied.copy()
+    valid_ip <- [x for x in to_validate IF validators.ip_address.ipv4(x)]
+                                       ENDIF
+                  ENDFOR
+    valid_url <- [x for x in to_validate IF validators.url(x)]
+                                        ENDIF
+                   ENDFOR
+    valid_domain <- [x for x in to_validate IF validators.domain(x)]
+                                           ENDIF
+                      ENDFOR
+
+    # only scanning the URLs to keep the script  within ~150 loc
+    # each returned object type has a different set of API endpoints 
+                                       ENDIF
+    # AND object members I'd have to code uniquely for
+                                                   ENDFOR
+
+    vtGet <- vt.Client(VTAPIKEY)
+    urlResults <- dict.fromkeys(valid_url)
+    scanRuns <-  config.getint('State', 'Runs')
+    OUTPUT "\nPrevious Runs", scanRuns
+    
+    for i in range(len(valid_url)):
+    ENDFOR
+
+        OUTPUT "\nSubmitting Url: ", valid_url[i]
+        url_id <- vt.url_id(valid_url[i])
+        response <- vtGet.get_object("/urls/{}", url_id)
+        urlResults[valid_url[i]] <- response.last_analysis_stats
+        config.write(open(install_directory+scanrc, 'w'))
+        # config  to store results AND increment of URLs scanned as subkeys 
+        # in config file. future/excised work.
+        time.sleep(13)
+
+    vtGet.close()       # Cleanup http connection
+
+    config.set('State', 'Runs', str(scanRuns +1))
+
+    OUTPUT "\nScanner run {} Report {}".format(config.getint('State', 'Runs'), datetime.datetime.now().strftime("%A, %d %b %H:%M"))
+                                       ENDFOR
+    OUTPUT "The number of virus products AND how the URL was reported by them."
+    OUTPUT "Results from The VirusTotal.com Pulic API"
+    for url, results in urlResults.items():
+        for type in results:
+            OUTPUT "{0:<11} : {1:<}".format(type, results[type])
+    ENDFOR
+        ENDFOR
+                                    ENDFOR
+
+    config.write(open(install_directory+scanrc, 'w'))
+    
+FUNCTION main(args):
+    '''  Framework logic AND function dispatcher'''
+ENDFUNCTION
+
+
+# Read config.
+    IF  os.path.isfile(install_directory+scanrc):
+        config.read(install_directory+scanrc)
+    ENDIF
+    
+    else:
+        init(args)
+
+# Command Dispatcher
+    action <- {'init': init, 'scan': scan}
+    action[args.subcommand](args)
+
+IF __name__ = "__main__":
+    '''File handle collection and CLI parsing by argparse'''
+    # TODO: work removed to get minimum working code ~150 loc
+    # 
+    # include submission of IP addresses, domains AND filehashes.
+    # functionality removed for LOC limitations
+                            ENDFOR
+    # add subparsers for unimplemented subcommands: list (previous runs etc),
+                     ENDFOR
+    # shutdown (handle KeyboardInterrupt Ctrl-C interrupt during scan)
+    # import hashlib  to submit file hashes for checking
+                                            ENDFOR
+    # import subprocess to do in-script installation of pypi on ModuleNotFoundError
+                            ENDFOR
+    parser=argparse.ArgumentParser(description="scanner Registry AND Malicious Item Scanner", usage='''
+    scanner.py <command> [filenames ..]
+ENDIF
+
+    The currently implemented subcommands are:
+    init                                Reset the Configuration
+    scan  [filename1 filename2 ..]      Submit one OR more plaintext files with either:
+                                        ONE IP address OR ONE Web URL OR ONE Domain per line''')
+    
+    subparser <- parser.add_subparsers(dest='subcommand', title='subcommands',help='scanner subcommand help')
+    subparser.required=True
+    parser_init <- subparser.add_parser('init', help='reset the configuration file.')
+    parser_init.set_defaults(func=init)
+                    ENDFUNCTION
+
+    parser_scan <- subparser.add_parser('scan', help='supply text files with items to be scanned.')
+    parser_scan.add_argument('files', type=argparse.FileType('r'), nargs='+')
+    parser_scan.set_defaults(func=scan)
+                    ENDFUNCTION
+
+    
+    args=parser.parse_args()
+    
+    main(args

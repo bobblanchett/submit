@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="content-type" content="text/html;charset=utf-8">
+  <title>scanner.py</title>
+  <link rel="stylesheet" href="pycco.css">
+</head>
+<body>
+<div id='container'>
+  <div id="background"></div>
+  <div class='section'>
+    <div class='docs'><h1>scanner.py</h1></div>
+  </div>
+  <div class='clearall'>
+  <div class='section' id='section-0'>
+    <div class='docs'>
+      <div class='octowrap'>
+        <a class='octothorpe' href='#section-0'>#</a>
+      </div>
+      
+    </div>
+    <div class='code'>
+      <div class="highlight"><pre><span></span><span class="sd">&#39;&#39;&#39; Scanner.py  submitted by Robert Blanchett 100639184</span>
+<span class="sd">    v0.7        for Holmesglen CertIV in cybesecurity 22334VIC</span>
+<span class="sd">                Programming Assessment Task 2.</span>
+
+<span class="sd">                A command line reporter from the Virus Total API</span>
+
+<span class="sd">                find __main__ for notes on TODO to expand this script. </span>
+
+<span class="sd">Developed on    Windows 10 Enterprise (Build 1904) </span>
+<span class="sd">                Developer Evaluation Virtual Box VM (linux host)</span>
+<span class="sd">                Python 3.9.6 (64 bit) from python.org</span>
+<span class="sd">                VScode 1.59 with pylance installed</span>
+
+<span class="sd">                All My own work. RDB</span>
+
+<span class="sd">                Requires vt-py and validators from pypi</span>
+
+<span class="sd">                ONLY urls are reported on at this stage to keep script within ~150 loc</span>
+
+<span class="sd">                provided test datafiles contain IPs, URLs and domains from: </span>
+<span class="sd">                spamhaus.de, URLhaus.de, iplists.FireHol.org and scumware.org</span>
+
+<span class="sd">                Please refer to the README for information development and </span>
+<span class="sd">                the distrubuted test files.</span>
+<span class="sd">                cf README the one known BUG with usage printing from configparser.</span>
+<span class="sd">&#39;&#39;&#39;</span>
+<span class="kn">import</span> <span class="nn">sys</span>          <span class="c1"># Python Runtime, exception tamer and basename extraction</span>
+<span class="kn">import</span> <span class="nn">os</span>           <span class="c1"># path and file operations</span>
+<span class="kn">import</span> <span class="nn">datetime</span>     <span class="c1"># stamping reports and filenames</span>
+<span class="kn">import</span> <span class="nn">configparser</span> <span class="c1"># state persistence across executions</span>
+<span class="kn">import</span> <span class="nn">argparse</span>     <span class="c1"># CLI from stdlib</span>
+<span class="kn">import</span> <span class="nn">socket</span>       <span class="c1"># check the network</span>
+<span class="kn">import</span> <span class="nn">time</span>         <span class="c1"># delay API calls</span>
+<span class="kn">import</span> <span class="nn">vt</span>           <span class="c1"># virus Total API Python client Library (install with pip)</span>
+<span class="kn">import</span> <span class="nn">validators</span>   <span class="c1"># validators library (install with pip)</span></pre></div>
+    </div>
+  </div>
+  <div class='clearall'></div>
+  <div class='section' id='section-1'>
+    <div class='docs'>
+      <div class='octowrap'>
+        <a class='octothorpe' href='#section-1'>#</a>
+      </div>
+      <h1>validators, vt-py modules from from pypi,</h1>
+    </div>
+    <div class='code'>
+      <div class="highlight"><pre></pre></div>
+    </div>
+  </div>
+  <div class='clearall'></div>
+  <div class='section' id='section-2'>
+    <div class='docs'>
+      <div class='octowrap'>
+        <a class='octothorpe' href='#section-2'>#</a>
+      </div>
+      <h1>Keys and Essential Constants  (Reserved from Configparser to aid readability)</h1>
+    </div>
+    <div class='code'>
+      <div class="highlight"><pre><span class="n">VTAPIKEY</span> <span class="o">=</span> <span class="s1">&#39;dd70d000e70408740bb90db27a8e9f4925a5868369ea6180fc727ad31d61259a&#39;</span>
+<span class="n">install_directory</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">0</span><span class="p">][:</span><span class="o">-</span><span class="mi">10</span><span class="p">]</span>   <span class="c1"># windows sets argv[0] to path to path *and* filename</span>
+<span class="n">now</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s2">&quot;-%Y-%m-</span><span class="si">%d</span><span class="s2">-%H-%M-%S&quot;</span><span class="p">)</span> <span class="c1"># .scanrc backup</span>
+<span class="n">scanrc</span> <span class="o">=</span> <span class="s1">&#39;.scanrc&#39;</span>                      <span class="c1"># Config File</span>
+<span class="n">config</span> <span class="o">=</span> <span class="n">configparser</span><span class="o">.</span><span class="n">ConfigParser</span><span class="p">()</span>
+<span class="n">supplied</span> <span class="o">=</span><span class="p">[]</span>                            <span class="c1"># processing buckets for validation and scan</span>
+<span class="n">valid_ip</span> <span class="o">=</span> <span class="p">[]</span>                           <span class="c1">#</span>
+<span class="n">valid_url</span> <span class="o">=</span> <span class="p">[]</span>                          <span class="c1">#</span>
+<span class="n">valid_domain</span> <span class="o">=</span> <span class="p">[]</span>                       <span class="c1">#</span></pre></div>
+    </div>
+  </div>
+  <div class='clearall'></div>
+  <div class='section' id='section-3'>
+    <div class='docs'>
+      <div class='octowrap'>
+        <a class='octothorpe' href='#section-3'>#</a>
+      </div>
+      
+    </div>
+    <div class='code'>
+      <div class="highlight"><pre><span class="k">def</span> <span class="nf">init</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39; Reset the configuration file backing up an existing one, if found. &#39;&#39;&#39;</span>
+
+    <span class="k">if</span>  <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">install_directory</span><span class="o">+</span><span class="n">scanrc</span><span class="p">):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Backing up Config File </span><span class="si">{</span><span class="n">install_directory</span><span class="o">+</span><span class="n">scanrc</span><span class="si">}</span><span class="s2"> to </span><span class="si">{</span><span class="n">install_directory</span><span class="o">+</span><span class="n">scanrc</span><span class="o">+</span><span class="n">now</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">install_directory</span><span class="o">+</span><span class="n">scanrc</span><span class="p">,</span> <span class="n">install_directory</span><span class="o">+</span><span class="n">scanrc</span><span class="o">+</span><span class="n">now</span><span class="p">)</span>       
+
+    <span class="k">else</span><span class="p">:</span>
+       <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Config File </span><span class="si">{</span><span class="n">install_directory</span><span class="o">+</span><span class="n">scanrc</span><span class="si">}</span><span class="s2"> not found, Resetting Configuration.&quot;</span><span class="p">)</span>
+
+    <span class="n">config</span><span class="p">[</span><span class="s1">&#39;DEFAULT&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;Runs&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s1">&#39;URLScanCount&#39;</span><span class="p">:</span> <span class="s1">&#39;0&#39;</span><span class="p">,</span> <span class="s1">&#39;Malicious&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">}</span>
+    <span class="n">config</span><span class="p">[</span><span class="s1">&#39;State&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;Runs&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s1">&#39;UrlScanCount&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s1">&#39;Malicious&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">}</span>
+    <span class="n">config</span><span class="p">[</span><span class="s1">&#39;LastRun&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">config</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="nb">open</span><span class="p">(</span><span class="n">install_directory</span><span class="o">+</span><span class="n">scanrc</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">))</span></pre></div>
+    </div>
+  </div>
+  <div class='clearall'></div>
+  <div class='section' id='section-4'>
+    <div class='docs'>
+      <div class='octowrap'>
+        <a class='octothorpe' href='#section-4'>#</a>
+      </div>
+      
+    </div>
+    <div class='code'>
+      <div class="highlight"><pre><span class="k">def</span> <span class="nf">check_network</span><span class="p">():</span>
+    <span class="sd">&#39;&#39;&#39;Internet availability check. Cloudflare is always there.&#39;&#39;&#39;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">socket</span><span class="o">.</span><span class="n">create_connection</span><span class="p">((</span><span class="s2">&quot;1.1.1.1&quot;</span><span class="p">,</span> <span class="mi">53</span><span class="p">))</span>
+        <span class="k">return</span> <span class="kc">True</span>
+    <span class="k">except</span> <span class="ne">OSError</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">False</span></pre></div>
+    </div>
+  </div>
+  <div class='clearall'></div>
+  <div class='section' id='section-5'>
+    <div class='docs'>
+      <div class='octowrap'>
+        <a class='octothorpe' href='#section-5'>#</a>
+      </div>
+      
+    </div>
+    <div class='code'>
+      <div class="highlight"><pre><span class="k">def</span> <span class="nf">scan</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39; Validate and submit to VirusTotal API for reports the contents of submitted files&#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="n">check_network</span><span class="p">():</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Internet available. Continuing.&quot;</span><span class="p">)</span>
+
+    <span class="k">else</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Internet unavailable. Exiting.&quot;</span><span class="p">)</span>
+        <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">()</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">processing supplied files.&quot;</span><span class="p">)</span> 
+    <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">files</span><span class="p">)):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">files</span><span class="p">[</span><span class="n">n</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">please wait. VirusTotal limits requests to 4/minute.&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;and so does this script!</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+    
+    <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">files</span><span class="p">)):</span>
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">args</span><span class="o">.</span><span class="n">files</span><span class="p">[</span><span class="n">l</span><span class="p">]:</span>
+            <span class="n">supplied</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">line</span><span class="o">.</span><span class="n">rstrip</span><span class="p">())</span>
+
+    <span class="nb">print</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">supplied</span><span class="p">)),</span> <span class="s2">&quot;items to be validated before scanning.</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="n">supplied</span><span class="p">)</span></pre></div>
+    </div>
+  </div>
+  <div class='clearall'></div>
+  <div class='section' id='section-6'>
+    <div class='docs'>
+      <div class='octowrap'>
+        <a class='octothorpe' href='#section-6'>#</a>
+      </div>
+      <p>validate items</p>
+    </div>
+    <div class='code'>
+      <div class="highlight"><pre>    <span class="n">to_validate</span> <span class="o">=</span> <span class="n">supplied</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="n">valid_ip</span> <span class="o">=</span> <span class="p">[</span><span class="n">x</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">to_validate</span> <span class="k">if</span> <span class="n">validators</span><span class="o">.</span><span class="n">ip_address</span><span class="o">.</span><span class="n">ipv4</span><span class="p">(</span><span class="n">x</span><span class="p">)]</span>
+    <span class="n">valid_url</span> <span class="o">=</span> <span class="p">[</span><span class="n">x</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">to_validate</span> <span class="k">if</span> <span class="n">validators</span><span class="o">.</span><span class="n">url</span><span class="p">(</span><span class="n">x</span><span class="p">)]</span>
+    <span class="n">valid_domain</span> <span class="o">=</span> <span class="p">[</span><span class="n">x</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">to_validate</span> <span class="k">if</span> <span class="n">validators</span><span class="o">.</span><span class="n">domain</span><span class="p">(</span><span class="n">x</span><span class="p">)]</span></pre></div>
+    </div>
+  </div>
+  <div class='clearall'></div>
+  <div class='section' id='section-7'>
+    <div class='docs'>
+      <div class='octowrap'>
+        <a class='octothorpe' href='#section-7'>#</a>
+      </div>
+      <p>only scanning the URLs to keep the script  within ~150 loc
+each returned object type has a different set of API endpoints 
+and object members I&rsquo;d have to code uniquely for</p>
+    </div>
+    <div class='code'>
+      <div class="highlight"><pre>    <span class="n">vtGet</span> <span class="o">=</span> <span class="n">vt</span><span class="o">.</span><span class="n">Client</span><span class="p">(</span><span class="n">VTAPIKEY</span><span class="p">)</span>
+    <span class="n">urlResults</span> <span class="o">=</span> <span class="nb">dict</span><span class="o">.</span><span class="n">fromkeys</span><span class="p">(</span><span class="n">valid_url</span><span class="p">)</span>
+    <span class="n">scanRuns</span> <span class="o">=</span>  <span class="n">config</span><span class="o">.</span><span class="n">getint</span><span class="p">(</span><span class="s1">&#39;State&#39;</span><span class="p">,</span> <span class="s1">&#39;Runs&#39;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Previous Runs&quot;</span><span class="p">,</span> <span class="n">scanRuns</span><span class="p">)</span>
+    
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">valid_url</span><span class="p">)):</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Submitting Url: &quot;</span><span class="p">,</span> <span class="n">valid_url</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+        <span class="n">url_id</span> <span class="o">=</span> <span class="n">vt</span><span class="o">.</span><span class="n">url_id</span><span class="p">(</span><span class="n">valid_url</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="n">vtGet</span><span class="o">.</span><span class="n">get_object</span><span class="p">(</span><span class="s2">&quot;/urls/</span><span class="si">{}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">url_id</span><span class="p">)</span>
+        <span class="n">urlResults</span><span class="p">[</span><span class="n">valid_url</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">last_analysis_stats</span>
+        <span class="n">config</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="nb">open</span><span class="p">(</span><span class="n">install_directory</span><span class="o">+</span><span class="n">scanrc</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">))</span></pre></div>
+    </div>
+  </div>
+  <div class='clearall'></div>
+  <div class='section' id='section-8'>
+    <div class='docs'>
+      <div class='octowrap'>
+        <a class='octothorpe' href='#section-8'>#</a>
+      </div>
+      <p>config  to store results and increment of URLs scanned as subkeys 
+in config file. future/excised work.</p>
+    </div>
+    <div class='code'>
+      <div class="highlight"><pre>        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">13</span><span class="p">)</span>
+
+    <span class="n">vtGet</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>       <span class="c1"># Cleanup http connection</span>
+
+    <span class="n">config</span><span class="o">.</span><span class="n">set</span><span class="p">(</span><span class="s1">&#39;State&#39;</span><span class="p">,</span> <span class="s1">&#39;Runs&#39;</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">scanRuns</span> <span class="o">+</span><span class="mi">1</span><span class="p">))</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Scanner run </span><span class="si">{}</span><span class="s2"> Report </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">getint</span><span class="p">(</span><span class="s1">&#39;State&#39;</span><span class="p">,</span> <span class="s1">&#39;Runs&#39;</span><span class="p">),</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s2">&quot;%A, </span><span class="si">%d</span><span class="s2"> %b %H:%M&quot;</span><span class="p">)))</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;The number of virus products and how the URL was reported by them.&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Results from The VirusTotal.com Pulic API&quot;</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">url</span><span class="p">,</span> <span class="n">results</span> <span class="ow">in</span> <span class="n">urlResults</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="k">for</span> <span class="nb">type</span> <span class="ow">in</span> <span class="n">results</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">{0:&lt;11}</span><span class="s2"> : </span><span class="si">{1:&lt;}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">type</span><span class="p">,</span> <span class="n">results</span><span class="p">[</span><span class="nb">type</span><span class="p">]))</span>
+
+    <span class="n">config</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="nb">open</span><span class="p">(</span><span class="n">install_directory</span><span class="o">+</span><span class="n">scanrc</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">))</span></pre></div>
+    </div>
+  </div>
+  <div class='clearall'></div>
+  <div class='section' id='section-9'>
+    <div class='docs'>
+      <div class='octowrap'>
+        <a class='octothorpe' href='#section-9'>#</a>
+      </div>
+      
+    </div>
+    <div class='code'>
+      <div class="highlight"><pre><span class="k">def</span> <span class="nf">main</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;  Framework logic and function dispatcher&#39;&#39;&#39;</span></pre></div>
+    </div>
+  </div>
+  <div class='clearall'></div>
+  <div class='section' id='section-10'>
+    <div class='docs'>
+      <div class='octowrap'>
+        <a class='octothorpe' href='#section-10'>#</a>
+      </div>
+      <p>Read config.</p>
+    </div>
+    <div class='code'>
+      <div class="highlight"><pre>    <span class="k">if</span>  <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">install_directory</span><span class="o">+</span><span class="n">scanrc</span><span class="p">):</span>
+        <span class="n">config</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">install_directory</span><span class="o">+</span><span class="n">scanrc</span><span class="p">)</span>
+    
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">init</span><span class="p">(</span><span class="n">args</span><span class="p">)</span></pre></div>
+    </div>
+  </div>
+  <div class='clearall'></div>
+  <div class='section' id='section-11'>
+    <div class='docs'>
+      <div class='octowrap'>
+        <a class='octothorpe' href='#section-11'>#</a>
+      </div>
+      <p>Command Dispatcher</p>
+    </div>
+    <div class='code'>
+      <div class="highlight"><pre>    <span class="n">action</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;init&#39;</span><span class="p">:</span> <span class="n">init</span><span class="p">,</span> <span class="s1">&#39;scan&#39;</span><span class="p">:</span> <span class="n">scan</span><span class="p">}</span>
+    <span class="n">action</span><span class="p">[</span><span class="n">args</span><span class="o">.</span><span class="n">subcommand</span><span class="p">](</span><span class="n">args</span><span class="p">)</span>
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="sd">&#39;&#39;&#39;File handle collection and CLI parsing by argparse&#39;&#39;&#39;</span></pre></div>
+    </div>
+  </div>
+  <div class='clearall'></div>
+  <div class='section' id='section-12'>
+    <div class='docs'>
+      <div class='octowrap'>
+        <a class='octothorpe' href='#section-12'>#</a>
+      </div>
+      <p>TODO: work removed to get minimum working code ~150 loc</p>
+<p>include submission of IP addresses, domains and filehashes.
+functionality removed for LOC limitations
+add subparsers for unimplemented subcommands: list (previous runs etc),
+shutdown (handle KeyboardInterrupt Ctrl-C interrupt during scan)
+import hashlib  to submit file hashes for checking
+import subprocess to do in-script installation of pypi on ModuleNotFoundError
+record detailed run information in .scanrc with configparser</p>
+    </div>
+    <div class='code'>
+      <div class="highlight"><pre>    <span class="n">parser</span><span class="o">=</span><span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="s2">&quot;scanner Registry and Malicious Item Scanner&quot;</span><span class="p">,</span> <span class="n">usage</span><span class="o">=</span><span class="s1">&#39;&#39;&#39;</span>
+<span class="s1">    scanner.py &lt;command&gt; [filenames ..]</span>
+
+<span class="s1">    The currently implemented subcommands are:</span>
+<span class="s1">    init                                Reset the Configuration</span>
+<span class="s1">    scan  [filename1 filename2 ..]      Submit one or more plaintext files with either:</span>
+<span class="s1">                                        ONE IP address or ONE Web URL or ONE Domain per line&#39;&#39;&#39;</span><span class="p">)</span>
+    
+    <span class="n">subparser</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">add_subparsers</span><span class="p">(</span><span class="n">dest</span><span class="o">=</span><span class="s1">&#39;subcommand&#39;</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;subcommands&#39;</span><span class="p">,</span><span class="n">help</span><span class="o">=</span><span class="s1">&#39;scanner subcommand help&#39;</span><span class="p">)</span>
+    <span class="n">subparser</span><span class="o">.</span><span class="n">required</span><span class="o">=</span><span class="kc">True</span>
+    <span class="n">parser_init</span> <span class="o">=</span> <span class="n">subparser</span><span class="o">.</span><span class="n">add_parser</span><span class="p">(</span><span class="s1">&#39;init&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s1">&#39;reset the configuration file.&#39;</span><span class="p">)</span>
+    <span class="n">parser_init</span><span class="o">.</span><span class="n">set_defaults</span><span class="p">(</span><span class="n">func</span><span class="o">=</span><span class="n">init</span><span class="p">)</span>
+    <span class="n">parser_scan</span> <span class="o">=</span> <span class="n">subparser</span><span class="o">.</span><span class="n">add_parser</span><span class="p">(</span><span class="s1">&#39;scan&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s1">&#39;supply text files with items to be scanned.&#39;</span><span class="p">)</span>
+    <span class="n">parser_scan</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;files&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="n">argparse</span><span class="o">.</span><span class="n">FileType</span><span class="p">(</span><span class="s1">&#39;r&#39;</span><span class="p">),</span> <span class="n">nargs</span><span class="o">=</span><span class="s1">&#39;+&#39;</span><span class="p">)</span>
+    <span class="n">parser_scan</span><span class="o">.</span><span class="n">set_defaults</span><span class="p">(</span><span class="n">func</span><span class="o">=</span><span class="n">scan</span><span class="p">)</span>
+    
+    <span class="n">args</span><span class="o">=</span><span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+    
+    <span class="n">main</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+
+</pre></div>
+    </div>
+  </div>
+  <div class='clearall'></div>
+</div>
+</body>

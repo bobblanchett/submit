@@ -1,0 +1,71 @@
+scanner.py 0.7 Bob Blanchett (c) 2021
+
+pre-requisites: 
+vt-py 		VirusTotal API Python client Library
+validators 	Validates conformant IP addresses, URL and FQDN
+  both installed from PyPI with pip or your favourite tarball.
+
+My Virus Total Public API key is included in the script. 
+    please handle carefully.
+
+Note that ONLY valid URLs are submitted to VT in this release
+to keep the code brief to the limits specified for the marker.
+
+BUGS: known bug is an error case with argparse.
+usage is delivered twice in one error case.
+the problem appears to be with subparsers rendering of usage
+and further errors.eg: FileNotFound.
+I have not been able to fix these.
+
+I suspect it may be related to:
+https://bugs.python.org/issue42297
+[argparse] Bad error message formatting when using custom usage text
+
+The VT API has unique API endpoints for each case, which would
+increase code markedly, so I decided to handle only URLs.
+API Ref: https://virustotal.github.io/vt-py/index.html
+
+Validators was chosen as Python stdlib only included batteries for 
+IP addresses
+https://validators.readthedocs.io/en/latest/index.html
+
+Included in this submission are several example test datafiles for testing
+TEST1.TXT 
+TEST2.TXT
+MIXEDDATA.TXT
+(you'll infer from the files that I have been working on querying filehashes,
+domains and IPv4 and IPv6 addresses, which were not possible to implement
+within the limits imposed)
+
+and a simple test harness I used during development, TESTER.BAT
+
+The Data in there was primarily obtained from 
+spamhaus.de, blocklist.de,scumware.org.
+
+The EICAR (European Institute for Computer Anti-Virus Research) eicar.org
+Anti Virus test file is also included as a test of hashlib
+ for future implementation.
+
+The script creates a text file ".scanrc" 
+which keeps a vestige of State across executions but will be used
+ to store details od each run.
+
+# TODO: work below removed to get minimum working code ~150 loc
+# 
+# handle and locate .scanrc in the home directory in a crossplatform way
+# option to handle data rejected from the filters & processing buckets
+#    noisily (currently silent) 
+# include submission of IP addresss, domains and filehashes.
+# sensible runtime debugging and verbosity options
+# filter enable this script allowing stdin for scanning
+# json, csv and IFS delimited output.
+# add subparsers for unimplemented subcommands: list (previous runs etc
+# shutdown (handle KeyboardInterrupt Ctrl-C interrupt during scan)
+# import hashlib  to submit file hashes for checking.
+# pull more detail from the API response object
+#   it is an Aladdin's Cave: 
+#    \https://developers.virustotal.com/v3.0/reference#url-object
+# catch ModuleNotFoundError cleanly module imports of non-stdlib (vt, validators)
+# import subprocess to do in-script pip installation of pypi libs on ModuleNotFoundError
+# record detailed run information in .scanrc with configparser
+#    (a format easily-albeit verbosely programatically accessible via stdlib.)
